@@ -3,56 +3,65 @@ import ReactECharts from "echarts-for-react";
 
 const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
   const chartRef = useRef(null);
-  const [zoomRange, setZoomRange] = useState(null);
-  const isApplyingZoom = useRef(false); // Prevents unnecessary re-renders
+  const isApplyingZoom = useRef(false);
+  const zoomState = useRef({ startValue: null, endValue: null }); // Store zoom range
+  const [zoomRange, setZoomRange] = useState({ start: "", end: "" });
 
-  // Store zoom state before updating
-  const saveZoomState = () => {
-    if (chartRef.current && !isApplyingZoom.current) {
-      const echartsInstance = chartRef.current.getEchartsInstance();
-      const option = echartsInstance.getOption();
-      
-      if (option?.dataZoom?.[0]) {
-        const zoomStart = option.dataZoom[0].start;
-        const zoomEnd = option.dataZoom[0].end;
-        
-        setZoomRange({ start: zoomStart, end: zoomEnd });
-  
-        // Log the zoomed index range
-        console.log(`Zoomed Index Range: Start = ${zoomStart}, End = ${zoomEnd}`);
+  useEffect(() => {
+    if (data.length > 0 && indexColumn) {
+      const xValues = data
+        .map((row) => row[indexColumn])
+        .filter((val) => val !== null && val !== undefined && val !== "");
+
+      if (xValues.length > 0) {
+        setZoomRange((prev) => ({
+          start: prev.start || xValues[0], // Preserve zoom or set first value
+          end: prev.end || xValues[xValues.length - 1], // Preserve zoom or set last value
+        }));
+
+        if (!zoomState.current.startValue || !zoomState.current.endValue) {
+          zoomState.current = {
+            startValue: xValues[0],
+            endValue: xValues[xValues.length - 1],
+          };
+        }
       }
     }
-  };
-  
+  }, [data, indexColumn]);
 
-  // Restore zoom AFTER updating chart
   useEffect(() => {
-    if (zoomRange && chartRef.current) {
-      isApplyingZoom.current = true;
+    if (chartRef.current && zoomState.current.startValue && zoomState.current.endValue) {
+      applyZoom(); // Reapply zoom on parameter change
+    }
+  }, [selectedColumns]); // Trigger when new parameters are added
+
+  const handleZoomInputChange = (e) => {
+    const { name, value } = e.target;
+    setZoomRange((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const applyZoom = () => {
+    if (chartRef.current) {
       const echartsInstance = chartRef.current.getEchartsInstance();
+      isApplyingZoom.current = true;
+
       echartsInstance.dispatchAction({
         type: "dataZoom",
-        start: zoomRange.start,
-        end: zoomRange.end,
+        startValue: zoomRange.start,
+        endValue: zoomRange.end,
       });
 
-      // Prevent infinite loop
+      zoomState.current = { startValue: zoomRange.start, endValue: zoomRange.end }; // Store applied zoom
+
       setTimeout(() => {
         isApplyingZoom.current = false;
       }, 200);
     }
-  }, [zoomRange, selectedColumns]); // 👈 Watch for selectedColumns too!
-
-  // Handle Restore Button Click
-  const handleRestore = () => {
-    if (chartRef.current) {
-      const echartsInstance = chartRef.current.getEchartsInstance();
-      echartsInstance.dispatchAction({ type: "restore" });
-      setZoomRange(null);
-    }
   };
 
-  // **Early return after Hooks to avoid ESLint errors**
   if (!data || !indexColumn || data.length === 0) {
     return (
       <div style={{ textAlign: "center", color: "#888", marginTop: "20px" }}>
@@ -61,7 +70,6 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
     );
   }
 
-  // Generate multiple Y-axis configuration
   const yAxisConfig = selectedColumns.length
     ? selectedColumns.map((col, index) => ({
         type: "value",
@@ -74,7 +82,6 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
       }))
     : [{ type: "value", name: "Default Axis" }];
 
-  // Create series for each selected column
   const series = selectedColumns.map((col, index) => ({
     name: col,
     type: "line",
@@ -85,7 +92,6 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
     symbolSize: 6,
   }));
 
-  // Configure the chart
   const options = {
     title: { text: "📊 Interactive Data Plot", left: "center", top: "10px" },
     tooltip: {
@@ -133,38 +139,70 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
     <div
       style={{
         width: "100%",
-        height: "700px",
+        height: "750px",
         padding: "15px",
         backgroundColor: "#fff",
         borderRadius: "10px",
         boxShadow: "0px 4px 8px rgba(0,0,0,0.1)",
       }}
     >
+      {/* Zoom Controls */}
+      <div
+        style={{
+          marginBottom: "10px",
+          display: "flex",
+          gap: "10px",
+          alignItems: "center",
+        }}
+      >
+        <span style={{ fontWeight: "bold" }}>Custom Zooming with X-Axis:</span>
+        <input
+          type="text"
+          name="start"
+          value={zoomRange.start || ""}
+          onChange={handleZoomInputChange}
+          style={{
+            padding: "5px",
+            borderRadius: "5px",
+            border: "1px solid #ccc",
+            width: "100px",
+          }}
+        />
+        <span>to</span>
+        <input
+          type="text"
+          name="end"
+          value={zoomRange.end || ""}
+          onChange={handleZoomInputChange}
+          style={{
+            padding: "5px",
+            borderRadius: "5px",
+            border: "1px solid #ccc",
+            width: "100px",
+          }}
+        />
+        <button
+          onClick={applyZoom}
+          style={{
+            padding: "8px 15px",
+            backgroundColor: "#28a745",
+            color: "white",
+            border: "none",
+            borderRadius: "5px",
+            cursor: "pointer",
+          }}
+        >
+          Apply Zoom
+        </button>
+      </div>
+
       <ReactECharts
         ref={chartRef}
         option={options}
         style={{ height: "650px", width: "100%" }}
         notMerge={true}
         lazyUpdate={true}
-        onEvents={{
-          dataZoom: saveZoomState,
-        }}
       />
-      {/* Restore Button */}
-      <button
-        onClick={handleRestore}
-        style={{
-          marginTop: "10px",
-          padding: "10px",
-          backgroundColor: "#007bff",
-          color: "white",
-          border: "none",
-          borderRadius: "5px",
-          cursor: "pointer",
-        }}
-      >
-        Restore Zoom
-      </button>
     </div>
   );
 };
