@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Checkbox, FormControlLabel, TextField, Select, MenuItem, InputLabel, FormControl } from "@mui/material";
 
-const ColumnSelection = ({ columns, onColumnSelect, onIndexColumnSelect }) => {
+const ColumnSelection = ({ columns, selectedColumns = [], onColumnSelect, onIndexColumnSelect }) => {
   const [searchTerm, setSearchTerm] = useState("");
 
   const filteredColumns = columns.filter((col) =>
@@ -17,9 +17,13 @@ const ColumnSelection = ({ columns, onColumnSelect, onIndexColumnSelect }) => {
         fullWidth
         margin="normal"
       />
+
       <FormControl fullWidth margin="normal">
         <InputLabel>Select X-Axis Column</InputLabel>
-        <Select onChange={(e) => onIndexColumnSelect(e.target.value)}>
+        <Select
+          value={columns.includes(selectedColumns) ? selectedColumns : ""}
+          onChange={(e) => onIndexColumnSelect(e.target.value)}
+        >
           {columns.map((col) => (
             <MenuItem key={col} value={col}>
               {col}
@@ -27,10 +31,16 @@ const ColumnSelection = ({ columns, onColumnSelect, onIndexColumnSelect }) => {
           ))}
         </Select>
       </FormControl>
+
       {filteredColumns.map((col) => (
         <FormControlLabel
           key={col}
-          control={<Checkbox onChange={(e) => onColumnSelect(col, e.target.checked)} />}
+          control={
+            <Checkbox
+              checked={selectedColumns.includes(col)}
+              onChange={(e) => onColumnSelect(col, e.target.checked)}
+            />
+          }
           label={col}
         />
       ))}

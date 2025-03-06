@@ -17,6 +17,7 @@ const App = () => {
   const handleFileUpload = (files) => {
     const file = files[0];
     const reader = new FileReader();
+
     reader.onload = (e) => {
       const result = e.target.result;
       let parsedData;
@@ -29,24 +30,22 @@ const App = () => {
         parsedData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
       }
 
-      // Validate parsedData
       if (!parsedData || parsedData.length === 0) {
         alert("The file is empty or could not be parsed.");
         return;
       }
 
       setData(parsedData);
-      setColumns(Object.keys(parsedData[0])); // Now safe to call Object.keys()
+      setColumns(Object.keys(parsedData[0]));
     };
+
     reader.readAsBinaryString(file);
   };
 
   const handleColumnSelect = (col, isSelected) => {
-    if (isSelected) {
-      setSelectedColumns([...selectedColumns, col]);
-    } else {
-      setSelectedColumns(selectedColumns.filter((c) => c !== col));
-    }
+    setSelectedColumns((prevSelected) =>
+      isSelected ? [...prevSelected, col] : prevSelected.filter((c) => c !== col)
+    );
   };
 
   const handleIndexColumnSelect = (column) => {
@@ -60,6 +59,7 @@ const App = () => {
         <FileUpload onFileUpload={handleFileUpload} />
         <ColumnSelection
           columns={columns}
+          selectedColumns={selectedColumns}
           onColumnSelect={handleColumnSelect}
           onIndexColumnSelect={handleIndexColumnSelect}
         />
