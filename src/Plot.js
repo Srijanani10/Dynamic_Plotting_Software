@@ -1,10 +1,12 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import ReactECharts from "echarts-for-react";
+import { saveAs } from "file-saver";
 
 const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
   const chartRef = useRef(null);
   const zoomState = useRef({ startValue: null, endValue: null }); // Stores zoom range only on parameter change
   const [zoomRange, setZoomRange] = useState({ start: "", end: "" });
+  const [zoomedData, setZoomedData] = useState([]);
 
   useEffect(() => {
     if (data.length > 0 && indexColumn) {
@@ -21,21 +23,8 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
     }
   }, [data, indexColumn]);
 
-  useEffect(() => {
-    if (chartRef.current && zoomState.current.startValue && zoomState.current.endValue) {
-      applyZoom(); // Reapply zoom only when parameters change
-    }
-  }, [selectedColumns]); // Trigger when new parameters are added
-
-  const handleZoomInputChange = (e) => {
-    const { name, value } = e.target;
-    setZoomRange((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
-  const applyZoom = () => {
+  // Function to apply zoom, wrapped in useCallback
+  const applyZoom = useCallback(() => {
     if (chartRef.current) {
       const echartsInstance = chartRef.current.getEchartsInstance();
       echartsInstance.dispatchAction({
@@ -47,9 +36,64 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
       // Store zoom state only if parameters are added/removed, not on reset
       zoomState.current = { startValue: zoomRange.start, endValue: zoomRange.end };
     }
+  }, [zoomRange]);
+
+  useEffect(() => {
+    if (chartRef.current && zoomState.current.startValue && zoomState.current.endValue) {
+      applyZoom();
+    }
+  }, [selectedColumns, applyZoom]);
+
+  // Update zoomedData when zoom changes
+  useEffect(() => {
+    if (data && zoomRange) {
+      const filteredData = data.filter(row => {
+        const xValue = new Date(row["DATETIME"]).getTime();
+        return xValue >= new Date(zoomRange.start).getTime() && xValue <= new Date(zoomRange.end).getTime();
+      });
+
+      setZoomedData(filteredData);
+    }
+  }, [data, zoomRange]);
+
+  const handleZoomInputChange = (e) => {
+    const { name, value } = e.target;
+    setZoomRange((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
   };
 
-  // Capture zoom event from ECharts and update zoomState only if parameter changes
+  const downloadCSV = (filteredData, fileName) => {
+    if (!filteredData || filteredData.length === 0) {
+      alert("No data available to export.");
+      return;
+    }
+
+    const csvContent =
+      Object.keys(filteredData[0]).join(",") +
+      "\n" +
+      filteredData.map((row) => Object.values(row).join(",")).join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    saveAs(blob, fileName);
+    console.log(`CSV file saved as: ${fileName}`);
+  };
+
+  const downloadZoomedCSV = () => {
+    downloadCSV(zoomedData, "zoomed_data.csv");
+  };
+
+  const downloadAllParametersInZoomedCSV = () => {
+    const filteredData = data.filter((row) => {
+      const xValue = new Date(row["DATETIME"]).getTime();
+      return xValue >= new Date(zoomRange.start).getTime() && xValue <= new Date(zoomRange.end).getTime();
+    });
+
+    downloadCSV(filteredData, "all_parameters_zoomed.csv");
+  };
+
+  // Capture zoom event from ECharts
   const handleChartEvents = {
     dataZoom: (params) => {
       if (params.batch && params.batch.length > 0) {
@@ -132,7 +176,7 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
     ],
     legend: {
       data: selectedColumns,
-      bottom: 10, // Moved below panning (zoom slider)
+      bottom: 10,
     },
     animationDuration: 800,
   };
@@ -158,54 +202,18 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
         }}
       >
         <span style={{ fontWeight: "bold" }}>Custom Zooming with X-Axis:</span>
-        <input
-          type="text"
-          name="start"
-          value={zoomRange.start || ""}
-          onChange={handleZoomInputChange}
-          style={{
-            padding: "5px",
-            borderRadius: "5px",
-            border: "1px solid #ccc",
-            width: "100px",
-          }}
-        />
+        <input type="text" name="start" value={zoomRange.start || ""} onChange={handleZoomInputChange} />
         <span>to</span>
-        <input
-          type="text"
-          name="end"
-          value={zoomRange.end || ""}
-          onChange={handleZoomInputChange}
-          style={{
-            padding: "5px",
-            borderRadius: "5px",
-            border: "1px solid #ccc",
-            width: "100px",
-          }}
-        />
-        <button
-          onClick={applyZoom}
-          style={{
-            padding: "8px 15px",
-            backgroundColor: "#28a745",
-            color: "white",
-            border: "none",
-            borderRadius: "5px",
-            cursor: "pointer",
-          }}
-        >
+        <input type="text" name="end" value={zoomRange.end || ""} onChange={handleZoomInputChange} />
+        <button onClick={applyZoom} style={{ padding: "8px 15px", backgroundColor: "#28a745", color: "white" }}>
           Apply Zoom
         </button>
       </div>
 
-      <ReactECharts
-        ref={chartRef}
-        option={options}
-        style={{ height: "650px", width: "100%" }}
-        notMerge={false}
-        lazyUpdate={true}
-        onEvents={handleChartEvents} // Capture zoom changes
-      />
+      <button onClick={downloadZoomedCSV}>Download Zoomed CSV</button>
+      <button onClick={downloadAllParametersInZoomedCSV}>Download All Parameters in Zoomed CSV</button>
+
+      <ReactECharts ref={chartRef} option={options} style={{ height: "650px", width: "100%" }} onEvents={handleChartEvents} />
     </div>
   );
 };
