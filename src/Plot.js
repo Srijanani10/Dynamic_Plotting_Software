@@ -3,8 +3,7 @@ import ReactECharts from "echarts-for-react";
 
 const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
   const chartRef = useRef(null);
-  const isApplyingZoom = useRef(false);
-  const zoomState = useRef({ startValue: null, endValue: null }); // Store zoom range
+  const zoomState = useRef({ startValue: null, endValue: null }); // Stores zoom range only on parameter change
   const [zoomRange, setZoomRange] = useState({ start: "", end: "" });
 
   useEffect(() => {
@@ -18,20 +17,13 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
           start: prev.start || xValues[0], // Preserve zoom or set first value
           end: prev.end || xValues[xValues.length - 1], // Preserve zoom or set last value
         }));
-
-        if (!zoomState.current.startValue || !zoomState.current.endValue) {
-          zoomState.current = {
-            startValue: xValues[0],
-            endValue: xValues[xValues.length - 1],
-          };
-        }
       }
     }
   }, [data, indexColumn]);
 
   useEffect(() => {
     if (chartRef.current && zoomState.current.startValue && zoomState.current.endValue) {
-      applyZoom(); // Reapply zoom on parameter change
+      applyZoom(); // Reapply zoom only when parameters change
     }
   }, [selectedColumns]); // Trigger when new parameters are added
 
@@ -46,20 +38,27 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
   const applyZoom = () => {
     if (chartRef.current) {
       const echartsInstance = chartRef.current.getEchartsInstance();
-      isApplyingZoom.current = true;
-
       echartsInstance.dispatchAction({
         type: "dataZoom",
         startValue: zoomRange.start,
         endValue: zoomRange.end,
       });
 
-      zoomState.current = { startValue: zoomRange.start, endValue: zoomRange.end }; // Store applied zoom
-
-      setTimeout(() => {
-        isApplyingZoom.current = false;
-      }, 200);
+      // Store zoom state only if parameters are added/removed, not on reset
+      zoomState.current = { startValue: zoomRange.start, endValue: zoomRange.end };
     }
+  };
+
+  // Capture zoom event from ECharts and update zoomState only if parameter changes
+  const handleChartEvents = {
+    dataZoom: (params) => {
+      if (params.batch && params.batch.length > 0) {
+        const { startValue, endValue } = params.batch[0];
+        if (startValue !== undefined && endValue !== undefined) {
+          setZoomRange({ start: startValue, end: endValue });
+        }
+      }
+    },
   };
 
   if (!data || !indexColumn || data.length === 0) {
@@ -100,7 +99,6 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
       confine: true,
       extraCssText: "z-index: 1000;",
     },
-    legend: { data: selectedColumns, bottom: 10 },
     toolbox: {
       show: true,
       top: 40,
@@ -116,7 +114,7 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
       containLabel: true,
       left: "12%",
       right: "12%",
-      bottom: "20%",
+      bottom: "25%",
       top: "22%",
       backgroundColor: "transparent",
       borderWidth: 1,
@@ -130,8 +128,12 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
     series: series,
     dataZoom: [
       { type: "inside", xAxisIndex: [0] },
-      { type: "slider", xAxisIndex: [0], bottom: 30 },
+      { type: "slider", xAxisIndex: [0], bottom: 60 },
     ],
+    legend: {
+      data: selectedColumns,
+      bottom: 10, // Moved below panning (zoom slider)
+    },
     animationDuration: 800,
   };
 
@@ -202,6 +204,7 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
         style={{ height: "650px", width: "100%" }}
         notMerge={true}
         lazyUpdate={true}
+        onEvents={handleChartEvents} // Capture zoom changes
       />
     </div>
   );
