@@ -15,6 +15,7 @@ const App = () => {
   const [indexColumn, setIndexColumn] = useState("");
 
   const handleFileUpload = (files) => {
+    
     const file = files[0];
     const reader = new FileReader();
 

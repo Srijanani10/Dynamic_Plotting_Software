@@ -202,7 +202,7 @@ const PlotComponent = ({ data, selectedColumns, indexColumn }) => {
         ref={chartRef}
         option={options}
         style={{ height: "650px", width: "100%" }}
-        notMerge={true}
+        notMerge={false}
         lazyUpdate={true}
         onEvents={handleChartEvents} // Capture zoom changes
       />
